@@ -6,6 +6,60 @@
   <title>Document</title>
 </head>
 <body>
+  <h1>Analizando archivos con AWS</h1>
+
+  <form action="" id="uploadForm">
+    <div>
+      <label for="imagen">Seleccione una imagen</label>
+      <input type="file" name="imagen" accept="image/*" required>
+    </div>
+    <button type="submit">Enviar</button>
+
+  </form>
+
+  <div>
+    <h3>Resultados del análisis</h3>
+    <ul id="listaEtiquetas"></ul>
+  </div>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    const listaEtiquetas = document.getElementById("listaEtiquetas");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault(); // Detenemos el envío
+
+      // FormData = contenedor de datos
+      const formData = new FormData(form);
+
+      listaEtiquetas.innerHTML = `<li>Analizando imagen con AWS...</li>`;
+
+      // Enviar los datos por el API...
+      try {
+        const response = await fetch('/api/analizar', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.labels) {
+          listaEtiquetas.innerHTML = "";
+          data.labels.forEach((label) => {
+            const li = document.createElement("li");
+            const confianza = Number(label.Confidence).toFixed(2);
+            li.textContent = `Etiqueta: ${label.Name} - Confianza: ${confianza}%`;
+            listaEtiquetas.appendChild(li);
+          });
+        } else {
+          listaEtiquetas.innerHTML = `<li>Error: ${data.message || 'No se pudieron detectar etiquetas.'}</li>`;
+        }
+      } catch (error) {
+        console.error(error);
+        listaEtiquetas.innerHTML = `<li>Error de conexión al procesar la imagen.</li>`;
+      }
+    });
+  </script>
 
 </body>
 </html>
