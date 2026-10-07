@@ -7,7 +7,21 @@ const path = require("path")
 const { RekognitionClient, DetectLabelsCommand } = require("@aws-sdk/client-rekognition");
 
 //OPCIONAL (considere cuando se realice pruebas con FLOCI)
-//Respuesta prueba...
+//Configuración del mockup (dato de prueba)
+const { mockClient } = require("aws-sdk-client-mock")
+const rekognitionMock = mockClient(RekognitionClient)
+//fin mockup
+
+//Definir la respusta personalizada
+//Cliente detecte evento, devolvera...
+rekognitionMock.on(DetectLabelsCommand).resolves({
+    Labels: [
+        {Name: 'Hombre', Confidence: 99.4 },
+        {Name: 'Mujer', Confidence: 96.1 },
+        {Name: 'Niño', Confidence: 80.3 },
+        {Name: 'Perro', Confidence: 98.4 }
+    ]
+})
 
 const app = express()
 const port = process.env.PORT || 3000
