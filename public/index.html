@@ -11,8 +11,8 @@
 
   <form action="" id="uploadForm">
     <div>
-      <label for="imagen">Seleccione una imagen</label>
-      <input type="file" name="imagen" accept="image/*" required>
+      <label for="archivo">Seleccione un archivo (Imagen o PDF)</label>
+      <input type="file" id="archivo" name="archivo" accept=".jpg, .jpeg, .png, .pdf" required>
     </div>
     <button type="submit">Enviar</button>
 
@@ -26,40 +26,106 @@
   <script>
     const form = document.getElementById("uploadForm");
     const listaEtiquetas = document.getElementById("listaEtiquetas");
+    const inputArchivo = document.getElementById("archivo");
+    const MAX_BYTES = 5 * 1024 * 1024;
+
+    function mostrarError(mensaje) {
+      listaEtiquetas.innerHTML = "";
+      const li = document.createElement("li");
+      li.textContent = mensaje;
+      listaEtiquetas.appendChild(li);
+    }
 
     form.addEventListener("submit", async (e) => {
-      e.preventDefault(); // Detenemos el envío
+      e.preventDefault();
 
-      // FormData = contenedor de datos
-      const formData = new FormData(form);
+      const archivo = inputArchivo.files[0];
 
-      listaEtiquetas.innerHTML = `<li>Analizando imagen con AWS...</li>`;
+      if (!archivo) {
+        mostrarError("Seleccione un archivo.");
+        return;
+      }
 
-      // Enviar los datos por el API...
+      // Detectar tipo por MIME o extensión
+      const nombre = archivo.name.toLowerCase();
+      const esPdf = archivo.type === "application/pdf" || nombre.endsWith(".pdf");
+      const esImagen = ["image/jpeg", "image/png"].includes(archivo.type) ||
+        [".jpg", ".jpeg", ".png"].some((ext) => nombre.endsWith(ext));
+
+      if (!esPdf && !esImagen) {
+        alert("Solo se permiten imágenes (.jpg, .png) o archivos PDF.");
+        return;
+      }
+
+      if (archivo.size > MAX_BYTES) {
+        alert("El archivo supera el límite de 5 MB.");
+        return;
+      }
+
+      const formData = new FormData();
+      let url;
+
+      if (esPdf) {
+        formData.append("archivo", archivo);
+        url = "/api/analizar-pdf";
+        listaEtiquetas.innerHTML = "<li>Analizando documento PDF con Textract...</li>";
+      } else {
+        // El endpoint de imágenes espera el campo "imagen"
+        formData.append("imagen", archivo);
+        url = "/api/analizar";
+        listaEtiquetas.innerHTML = "<li>Analizando imagen con AWS Rekognition...</li>";
+      }
+
       try {
-        const response = await fetch('/api/analizar', {
-          method: 'POST',
+        const response = await fetch(url, {
+          method: "POST",
           body: formData
         });
 
         const data = await response.json();
 
-        if (data.success && data.labels) {
-          listaEtiquetas.innerHTML = "";
-          data.labels.forEach((label) => {
-            const li = document.createElement("li");
-            const confianza = Number(label.Confidence).toFixed(2);
-            li.textContent = `Etiqueta: ${label.Name} - Confianza: ${confianza}%`;
-            listaEtiquetas.appendChild(li);
-          });
+        if (!response.ok) {
+          mostrarError("Error: " + (data.message || data.error || "No se pudo analizar el archivo."));
+          return;
+        }
+
+        if (esPdf) {
+          mostrarPdf(data.resultado || []);
         } else {
-          listaEtiquetas.innerHTML = `<li>Error: ${data.message || 'No se pudieron detectar etiquetas.'}</li>`;
+          mostrarImagen(data.labels || []);
         }
       } catch (error) {
         console.error(error);
-        listaEtiquetas.innerHTML = `<li>Error de conexión al procesar la imagen.</li>`;
+        mostrarError("Error de conexión: no se pudo procesar el archivo. Intente nuevamente.");
       }
     });
+
+    function mostrarImagen(labels) {
+      if (labels.length === 0) {
+        mostrarError("No se pudieron detectar etiquetas.");
+        return;
+      }
+      listaEtiquetas.innerHTML = "";
+      labels.forEach((label) => {
+        const li = document.createElement("li");
+        const confianza = Number(label.Confidence).toFixed(2);
+        li.textContent = `Etiqueta: ${label.Name} - Confianza: ${confianza}%`;
+        listaEtiquetas.appendChild(li);
+      });
+    }
+
+    function mostrarPdf(resultados) {
+      if (resultados.length === 0) {
+        mostrarError("No se detectó texto en el documento.");
+        return;
+      }
+      listaEtiquetas.innerHTML = "";
+      resultados.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = `${item.text} - ${item.confidence}`;
+        listaEtiquetas.appendChild(li);
+      });
+    }
   </script>
 
 </body>
